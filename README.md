@@ -1,14 +1,15 @@
-# o365_slow_spray
+# adfsbrute
 
-This script calculates the ADFS url of an organization and tests one or many users and one or many passwords, allowing password spraying or bruteforce attacks. Implemented for custom ADFS (not against Microsoft) to test in security related audits. 
+A script to test credentials against Active Directory Federation Services (ADFS), calculating the ADFS url of an organization and allowing password spraying or bruteforce attacks. 
 
-The idea is carrying out a password spraying attack with a random (and very high) number of seconds between each test and a proxy list to avoid detection. To avoid testing the same credentials the failed ones are stored in a log file.
+The main idea is carrying out password spraying attacks with a random and high delay between each test and using a list of proxies to make the detection by the Blue Team more difficult, but brute force attacks are also possible. Tested logins will get stored in a log file to avoid testing them twice.
 
 
 ## Usage
 
 ```
-python3 main.py -t TARGET [-u USER] [-U USER_LIST] [-p PASSWORD] [-P PASSWORD_LIST] [-m MIN_TIME] [-M MAX_TIME] [-pl PROXY_LIST] [-r RANDOM_COMBINATIONS] [-l LOG_FILE] [-d DEBUG]
+python3 main.py -t TARGET [-u USER] [-U USER_LIST] [-p PASSWORD] [-P PASSWORD_LIST] 
+[-m MIN_TIME] [-M MAX_TIME] [-pl PROXY_LIST] [-r RANDOM_COMBINATIONS] [-l LOG_FILE] [-d DEBUG]
 ```
 
 The parameters for the attacks are:
@@ -37,3 +38,8 @@ The parameters for the attacks are:
 
 
 ![example sprayer](https://i.imgur.com/KP5Cxk5.png)
+
+
+## Note
+
+This script is implemented to test in security audits, DO NOT use without proper authorization from the company owning the ADFS or you will block accounts.
