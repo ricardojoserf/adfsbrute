@@ -24,7 +24,7 @@ def get_args():
 	parser.add_argument('-l', '--logfile', required=False, default="tested.txt", action='store', help='Log file. Default: tested.txt')
 	parser.add_argument('-d', '--debug', required=False, default=True, action='store', help='Debug mode. Default: False')
 	parser.add_argument('-pl', '--proxy_list', required=False, default=None, action='store', help='Proxy list')
-	#parser.add_argument('-up', '--userpassword_list', required=False, default=None, action='store', help='List with format user:password')
+	parser.add_argument('-UP', '--userpassword_list', required=False, default=None, action='store', help='List with format user:password')
 	return parser
 
 
@@ -84,9 +84,7 @@ def calculate_values(target):
 def main():
 	# Get arguments
 	args = get_args().parse_args()
-
-	# if (args.user is None and args.user_list is None and args.userpassword_list is None) or (args.password is None and args.password_list is None and args.userpassword_list is None):
-	if (args.user is None and args.user_list is None) or (args.password is None and args.password_list is None):
+	if (args.user is None and args.user_list is None and args.userpassword_list is None) or (args.password is None and args.password_list is None and args.userpassword_list is None):
 		get_args().print_help()
 		sys.exit(0)
 	if (args.user_list is not None and not os.path.isfile(args.user_list)):
@@ -95,11 +93,19 @@ def main():
 	if (args.password_list is not None and not os.path.isfile(args.password_list)):
 		print ("Error: Use '-P' with a file of passwords or '-p' for a single password")
 		sys.exit(0)
+	if (args.password_list is not None and not os.path.isfile(args.password_list)):
+		print ("Error: Use '-UP' with a file of usernames and passwords with the format username:password")
+		sys.exit(0)
 
 	# Create variables
-	users =      [args.user] if args.user is not None else open(args.user_list).read().splitlines()
-	passwords =  [args.password] if args.password is not None else open(args.password_list).read().splitlines()
-	pairs =      [(u,p) for u in users for p in passwords]
+	if args.userpassword_list is None:
+		users =      [args.user] if args.user is not None else open(args.user_list).read().splitlines()
+		passwords =  [args.password] if args.password is not None else open(args.password_list).read().splitlines()
+		pairs =      [(u,p) for u in users for p in passwords]
+	else:
+		creds =      list(filter(None,[c for c in open(args.userpassword_list).read().splitlines()]))
+		pairs =      [(c.split(":")[0],c.split(":")[1]) for c in creds]
+
 	proxy_list = open(args.proxy_list).read().splitlines() if args.proxy_list is not None else None
 	debug =      json.loads(args.debug.lower()) if isinstance(args.debug,str) else args.debug
 	randomize =  json.loads(args.randomize.lower()) if isinstance(args.randomize,str) else args.randomize
