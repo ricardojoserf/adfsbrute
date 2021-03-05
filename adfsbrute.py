@@ -127,7 +127,10 @@ def main():
 	# Get arguments
 	args = get_args().parse_args()
 	if (args.user is None and args.user_list is None and args.userpassword_list is None) or (args.password is None and args.password_list is None and args.userpassword_list is None):
-		get_args().print_help()
+		dafs_url = calculate_values(args.target)
+		print ("[+] ADFS url: %s"%(dafs_url))
+		print ("[+] Please provide user (-u), password (-p), User list (-U), Password list (-P) or User:Password list (-UP) to carry out an attack.")
+		#get_args().print_help()
 		sys.exit(0)
 	if (args.user_list is not None and not os.path.isfile(args.user_list)):
 		print ("[!] Error: Use '-U' with a file of users or '-u' for a single user")
