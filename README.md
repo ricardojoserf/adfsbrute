@@ -4,44 +4,75 @@ A script to test credentials against Active Directory Federation Services (ADFS)
 
 The main idea is carrying out password spraying attacks with a random and high delay between each test and using a list of proxies or Tor to make the detection by the Blue Team more difficult. Brute force attacks are also possible, or testing credentials with the format *username:password* (for example from [Pwndb](https://github.com/davidtavarez/pwndb)). Tested logins will get stored in a log file to avoid testing them twice.
 
-
 ## Usage
 
 ```
 ./adfsbrute.py -t TARGET [-u USER] [-U USER_LIST] [-p PASSWORD] [-P PASSWORD_LIST] [-UL userpassword_list]
-[-m MIN_TIME] [-M MAX_TIME] [-pl PROXY_LIST] [-r RANDOM_COMBINATIONS] [-l LOG_FILE] [-d DEBUG]
+[-m MIN_TIME] [-M MAX_TIME] [-tp TOR_PASSWORD] [-pl PROXY_LIST] [-n NUMBER_OF_REQUESTS_PER_IP]
+[-s STOP_ON_SUCCESS] [-r RANDOM_COMBINATIONS] [-d DEBUG] [-l LOG_FILE]
 ```
 
 The parameters for the attacks are:
 
 	* -t: Target domain. Example: test.com
 	
-	* -u: Single username
+	* -u: Single username. Example: agarcia@domain.com
 	
-	* -U: File with a list of usernames
+	* -U: File with a list of usernames. Example: users.txt
 	
-	* -p: Single password
+	* -p: Single password: Example: Company123
 	
-	* -P: File with a list of passwords
+	* -P: File with a list of passwords. Example: passwords.txt
 
-	* -UP: File with a list of credentials in the format "username:password"
+	* -UP: File with a list of credentials in the format "username:password". Example: userpass.txt
 
-	* -m : Minimum value of random seconds to wait between each test. Default: 300
+	* -m : Minimum value of random seconds to wait between each test. Default: 30
 
-	* -M : Maximum value of random seconds to wait between each test. Default: 600
+	* -M : Maximum value of random seconds to wait between each test. Default: 60
 
 	* -tp: Tor password (change IP addresses using Tor)
 
 	* -pl: Use a proxy list (change IP addresses using a list of proxy IPs)
 
-	* -r: Randomize the combination of users and passwords. Default: True
+	* -n: Number of requests before changing IP address (used with -tp or -pl). Default: 1
 
-	* -l: Log file location with already tested credentials. Default: ./tested.txt
+	* -s: Stop on success, when one correct credential is found. Default: False
+
+	* -r: Randomize the combination of users and passwords. Default: True
 
 	* -d: Show debug messages. Default: True
 
+	* -l: Log file location with already tested credentials. Default: tested.txt
 
-![example sprayer](https://i.imgur.com/KP5Cxk5.png)
+
+## Examples
+
+Password spraying with password "Company123", tor password is "test123" and changing the IP every 3 requests:
+
+```
+python3 adfsbrute.py -t company.com -U users.txt -p Company123 -tp test123 -n 3
+```
+
+![image](images/image1.png)
+
+
+Password spraying with password "Company123", tor password is "test123", changing the IP for every request, random delay time between 10 and 20 seconds and do not randomize the order of users:
+
+```
+python3 adfsbrute.py -t company.com -U users.txt -p Company123 -tp test123 -m 10 -M 20 -r False
+```
+
+![image](images/image2.png)
+
+
+Finding ADFS url:
+
+```
+python3 adfsbrute.py -t company.com
+```
+
+![image](images/image3.png)
+
 
 
 ## Using Tor
