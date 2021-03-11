@@ -30,7 +30,7 @@ The parameters for the attacks are:
 
 	* -M : Maximum value of random seconds to wait between each test. Default: 60
 
-	* -tp: Tor password (change IP addresses using Tor)
+	* -tp: [Tor password (change IP addresses using Tor)](https://github.com/ricardojoserf/adfsbrute#using-tor)
 
 	* -pl: Use a proxy list (change IP addresses using a list of proxy IPs)
 
