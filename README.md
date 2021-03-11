@@ -2,7 +2,7 @@
 
 A script to test credentials against Active Directory Federation Services (ADFS), calculating the ADFS url of an organization and allowing password spraying or bruteforce attacks. 
 
-The main idea is carrying out password spraying attacks with a random and high delay between each test and using a list of proxies or Tor to make the detection by the Blue Team more difficult. Brute force attacks are also possible, or testing credentials with the format *username:password* (for example from [Pwndb](https://github.com/davidtavarez/pwndb)). Tested logins will get stored in a log file to avoid testing them twice.
+The main idea is carrying out password spraying attacks with a random and high delay between each test and using a list of proxies or [Tor](https://github.com/ricardojoserf/adfsbrute#using-tor) to make the detection by the Blue Team more difficult. Brute force attacks are also possible, or testing credentials with the format *username:password* (for example from [Pwndb](https://github.com/davidtavarez/pwndb)). Tested logins will get stored in a log file to avoid testing them twice.
 
 ## Usage
 
@@ -30,7 +30,7 @@ The parameters for the attacks are:
 
 	* -M : Maximum value of random seconds to wait between each test. Default: 60
 
-	* -tp: [Tor password (change IP addresses using Tor)](https://github.com/ricardojoserf/adfsbrute#using-tor)
+	* -tp: Tor password (change IP addresses using Tor)
 
 	* -pl: Use a proxy list (change IP addresses using a list of proxy IPs)
 
