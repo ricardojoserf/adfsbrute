@@ -53,8 +53,8 @@ Password spraying with password "Company123", tor password is "test123" and chan
 python3 adfsbrute.py -t company.com -U users.txt -p Company123 -tp test123 -n 3
 ```
 
-![image](images/image1.png){:height="80%" width="80%"}
 
+<img src="images/image1.png" width="80%" height="80%">
 
 Password spraying with password "Company123", tor password is "test123", changing the IP for every request, random delay time between 10 and 20 seconds and do not randomize the order of users:
 
@@ -62,7 +62,7 @@ Password spraying with password "Company123", tor password is "test123", changin
 python3 adfsbrute.py -t company.com -U users.txt -p Company123 -tp test123 -m 10 -M 20 -r False
 ```
 
-![image](images/image2.png){:height="80%" width="80%"}
+<img src="images/image2.png" width="80%" height="80%">
 
 
 Finding ADFS url:
@@ -71,8 +71,8 @@ Finding ADFS url:
 python3 adfsbrute.py -t company.com
 ```
 
-![image](images/image3.png){:height="80%" width="80%"}
 
+<img src="images/image3.png" width="80%" height="80%">
 
 
 ## Using Tor
