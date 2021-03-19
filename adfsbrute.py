@@ -91,7 +91,7 @@ def check_activesync_user(credential,debug,proxy,test_credentials_file,counter,p
 		"User-Agent": random_user_agent
 	}
 	response = s.get(active_sync_url, headers = headers, verify = False, proxies = proxy)
-	if debug: print("[%s/%s] %s Response status code: %s" % (counter,pairs,time.strftime("%H:%M"),response.status_code))
+	if debug: print("[%s/%s] %s - Response status code: %s" % (counter,pairs,time.strftime("%H:%M"),response.status_code))
 	if response.status_code == 200 or response.status_code == 505:
 		print("[%s/%s] %s - CORRECT credentials found: %s:%s"%(counter,pairs,time.strftime("%H:%M"),user,password))
 		write_tested(user,password,test_credentials_file,"CORRECT",ip_)
